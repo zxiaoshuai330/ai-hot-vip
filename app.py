@@ -222,7 +222,7 @@ def home():
 
     <body>
 
-    <div class="title">⚡ 熱點雷達（體驗版）</div>
+   <div class="title">⚡ 熱點雷達</div>
 
     <form method="post" onsubmit="startAnalysis(this, event)">
         <input name="today" placeholder="今日得分率">
