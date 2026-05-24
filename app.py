@@ -4,10 +4,9 @@ import os
 
 app = Flask(__name__)
 
-# 🔥 設定LINE連結
-line_link = "https://reurl.cc/EmyEMg"
+# ✅ 改成你的LINE
+line_link = "https://line.me/ti/p/nkakY8ZXma"
 
-# 🔥 免費次數（存在瀏覽器）
 MAX_FREE = 3
 
 @app.route("/", methods=["GET", "POST"])
@@ -50,13 +49,11 @@ def home():
             else:
                 status = "訊號累積中"
 
-            # 訊號
             signal_chance = random.randint(60, 95)
             signal_text = f"🔥 成功捕捉熱點訊號（{signal_chance}%）"
 
             confidence = random.randint(80, 96)
 
-            # 🔒 鎖區塊
             def lock_block(text):
                 return f'''
                 <div onclick="goLine()"
@@ -176,7 +173,7 @@ def home():
     function startAnalysis(form, e) {{
         e.preventDefault();
 
-        if(count >= {MAX_FREE}) {{
+        if(count > {MAX_FREE}) {{
             alert("免費次數已用完，請加入LINE解鎖");
             window.location.href = "{line_link}";
             return;
@@ -199,13 +196,11 @@ def home():
             setTimeout(() => {{
                 el.classList.add("show");
 
-                // 🔥 第3次後鎖
-                if(i === 4) {{
-                    let count = localStorage.getItem("use_count") || 0;
-                    if(count >= {MAX_FREE}) {{
-                        document.getElementById("vip-area").style.display = "none";
-                        document.getElementById("lock-area").style.display = "block";
-                    }}
+                let count = localStorage.getItem("use_count") || 0;
+
+                if(count > {MAX_FREE}) {{
+                    document.getElementById("vip-area").style.display = "none";
+                    document.getElementById("lock-area").style.display = "block";
                 }}
 
                 if (i === steps.length - 1) {{
@@ -222,7 +217,7 @@ def home():
 
     <body>
 
-   <div class="title">⚡ 熱點雷達</div>
+    <div class="title">⚡ 熱點雷達</div>
 
     <form method="post" onsubmit="startAnalysis(this, event)">
         <input name="today" placeholder="今日得分率">
