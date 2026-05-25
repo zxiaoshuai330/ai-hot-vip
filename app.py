@@ -28,7 +28,7 @@ def home():
         show_result = "block"
 
         try:
-            # 🔥 使用者IP
+            # 🔥 Firebase 計數
             user_id = request.remote_addr
             doc_ref = db.collection("users").document(user_id)
             doc = doc_ref.get()
@@ -46,6 +46,7 @@ def home():
             last1 = request.form.get("last1", "")
             last2 = request.form.get("last2", "")
 
+            # ❗ 防呆
             if not current or not last1 or not last2:
                 raise Exception("請輸入完整數值")
 
@@ -89,7 +90,7 @@ def home():
 
             signal_extra = gen_signal()
 
-            # 🔥 操作建議（你的邏輯）
+            # 🔥 操作建議
             advice_type = random.choice(["不建議", "低本", "免費"])
 
             if advice_type == "不建議":
@@ -156,7 +157,7 @@ def home():
             """
 
         except Exception as e:
-            result = f"<div class='card'>錯誤：{str(e)}</div>"
+            result = f"<div class='card'>🔥錯誤：{str(e)}</div>"
 
     return f"""
     <html>
