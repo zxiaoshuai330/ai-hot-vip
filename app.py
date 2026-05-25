@@ -5,7 +5,7 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# 🔥 Firebase 初始化（只初始化一次）
+# 🔥 Firebase 初始化（避免重複）
 if not firebase_admin._apps:
     cred = credentials.Certificate("serviceAccountKey.json")
     firebase_admin.initialize_app(cred)
@@ -19,18 +19,16 @@ LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 @app.route("/", methods=["GET", "POST"])
 def home():
     result = ""
-    show_result = "none"
 
+    # 🔥 預設輸入值（讓輸入保留）
     today = ""
     current = ""
     last1 = ""
     last2 = ""
 
     if request.method == "POST":
-        show_result = "block"
-
         try:
-            # 🔥 使用者次數
+            # 🔥 Firebase 計數
             user_id = request.remote_addr
             doc_ref = db.collection("users").document(user_id)
             doc = doc_ref.get()
@@ -58,7 +56,7 @@ def home():
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
-            # 🔥 波動
+            # 🔥 波動判斷
             if diff > 80:
                 risk = "高波動（節奏不穩）"
             elif diff > 30:
@@ -66,7 +64,7 @@ def home():
             else:
                 risk = "穩定節奏"
 
-            # 🔥 節奏
+            # 🔥 節奏判斷
             if current_i > avg * 1.3:
                 status = "進入尾段醞釀"
             elif current_i < avg * 0.7:
@@ -74,7 +72,7 @@ def home():
             else:
                 status = "訊號累積中"
 
-            # 🔥 訊號
+            # 🔥 訊號產生
             def gen_signal():
                 mode = random.choice(["球", "免"])
                 count_s = random.randint(1, 2)
@@ -88,69 +86,62 @@ def home():
 
             signal_extra = gen_signal()
 
-            # 🔥 操作建議（你指定邏輯）
+            # 🔥 操作建議（你要求的邏輯）
             advice_type = random.choice(["不建議", "低本", "免費"])
 
             if advice_type == "不建議":
                 advice_text = "⚠️ 不建議進場"
-                extra_text = ""
+                extra = ""
             elif advice_type == "低本":
                 advice_text = "💡 建議低本測試"
-                extra_text = f"<br>🔎 訊號：{signal_extra}"
+                extra = f"<br>🔎 訊號：{signal_extra}"
             else:
                 advice_text = "🎁 建議購買免費遊戲"
-                extra_text = f"<br>🔎 訊號：{signal_extra}"
+                extra = f"<br>🔎 訊號：{signal_extra}"
 
             # 🔥 第4次鎖
             if count >= 4:
                 lock_html = f"""
                 <a href="{LINE_LINK}" target="_blank">
-                    <div class="card step highlight">
+                    <div class="card highlight">
                         🔒 操作建議（點我解鎖）
                     </div>
                 </a>
-
                 <a href="{LINE_LINK}" target="_blank">
-                    <div class="card step">
+                    <div class="card">
                         🔒 建議區間（點我解鎖）
                     </div>
                 </a>
                 """
             else:
                 lock_html = f"""
-                <div class="card step highlight">
-                    操作建議：{advice_text}{extra_text}
+                <div class="card highlight">
+                    操作建議：{advice_text}{extra}
                 </div>
-
-                <div class="card step">
+                <div class="card">
                     建議區間：依當前節奏浮動
                 </div>
                 """
 
+            # 🔥 結果
             result = f"""
-            <div id="cards">
-                <div class="card step red">
-                    📊 分析結果如下
-                </div>
+            <div class="card red">📊 分析結果如下</div>
 
-                <div class="card step">
-                    🔥 成功捕捉熱點訊號
-                </div>
+            <div class="card">🔥 成功捕捉熱點訊號</div>
 
-                <div class="card step">
-                    📊 節奏判定：{status}<br>
-                    ⚠️ 波動狀態：{risk}
-                </div>
+            <div class="card">
+                📊 節奏判定：{status}<br>
+                ⚠️ 波動狀態：{risk}
+            </div>
 
-                {lock_html}
+            {lock_html}
 
-                <div class="card step">
-                    🤖 AI信心指數：{random.randint(80,96)}%
-                </div>
+            <div class="card">
+                🤖 AI信心指數：{random.randint(80,96)}%
+            </div>
 
-                <div class="card step small">
-                    💡 建議低倍觀察，避免重壓
-                </div>
+            <div class="card small">
+                💡 建議低倍觀察，避免重壓
             </div>
             """
 
@@ -191,7 +182,7 @@ def home():
         border-radius:15px;
     }}
     .highlight {{
-        background:orange;
+        background:yellow;
         color:black;
         font-weight:bold;
     }}
@@ -213,7 +204,6 @@ def home():
         ※ 本系統為AI模型推估，結果僅供參考
     </div>
 
-    <!-- 🔥 這裡是關鍵修正 -->
     <form method="POST" action="/">
         <input name="today" placeholder="今日得分率" value="{today}">
         <input name="current" placeholder="未開轉數" value="{current}">
@@ -222,7 +212,8 @@ def home():
         <button type="submit">開始分析</button>
     </form>
 
-    <div style="display:{show_result};">
+    <!-- 🔥 不再用 display:none，保證顯示 -->
+    <div>
         {result}
     </div>
 
@@ -230,5 +221,6 @@ def home():
     </html>
     """
 
+# 🔥 Render 用
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)
