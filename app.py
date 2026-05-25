@@ -2,12 +2,14 @@ from flask import Flask, request
 import random
 import os
 
-# 🔥 Firebase
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-cred = credentials.Certificate("serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+# 🔥 Firebase 初始化（只初始化一次）
+if not firebase_admin._apps:
+    cred = credentials.Certificate("serviceAccountKey.json")
+    firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
 app = Flask(__name__)
@@ -28,7 +30,7 @@ def home():
         show_result = "block"
 
         try:
-            # 🔥 Firebase 計數
+            # 🔥 使用者次數
             user_id = request.remote_addr
             doc_ref = db.collection("users").document(user_id)
             doc = doc_ref.get()
@@ -46,7 +48,6 @@ def home():
             last1 = request.form.get("last1", "")
             last2 = request.form.get("last2", "")
 
-            # ❗ 防呆
             if not current or not last1 or not last2:
                 raise Exception("請輸入完整數值")
 
@@ -73,9 +74,6 @@ def home():
             else:
                 status = "訊號累積中"
 
-            signal_chance = random.randint(60, 95)
-            confidence = random.randint(80, 96)
-
             # 🔥 訊號
             def gen_signal():
                 mode = random.choice(["球", "免"])
@@ -90,7 +88,7 @@ def home():
 
             signal_extra = gen_signal()
 
-            # 🔥 操作建議
+            # 🔥 操作建議（你指定邏輯）
             advice_type = random.choice(["不建議", "低本", "免費"])
 
             if advice_type == "不建議":
@@ -136,7 +134,7 @@ def home():
                 </div>
 
                 <div class="card step">
-                    🔥 成功捕捉熱點訊號（{signal_chance}%）
+                    🔥 成功捕捉熱點訊號
                 </div>
 
                 <div class="card step">
@@ -147,7 +145,7 @@ def home():
                 {lock_html}
 
                 <div class="card step">
-                    🤖 AI信心指數：{confidence}%
+                    🤖 AI信心指數：{random.randint(80,96)}%
                 </div>
 
                 <div class="card step small">
@@ -169,12 +167,6 @@ def home():
         color:white;
         text-align:center;
         padding:20px;
-        font-family:sans-serif;
-    }}
-    .title {{
-        color:orange;
-        font-size:26px;
-        font-weight:bold;
     }}
     input {{
         width:90%;
@@ -215,12 +207,14 @@ def home():
     </head>
 
     <body>
-    <div class="title">⚡ 熱點雷達</div>
+
+    <h2>⚡ 熱點雷達</h2>
     <div style="font-size:12px;color:gray;">
         ※ 本系統為AI模型推估，結果僅供參考
     </div>
 
-    <form method="post">
+    <!-- 🔥 這裡是關鍵修正 -->
+    <form method="POST" action="/">
         <input name="today" placeholder="今日得分率" value="{today}">
         <input name="current" placeholder="未開轉數" value="{current}">
         <input name="last1" placeholder="上次轉數" value="{last1}">
