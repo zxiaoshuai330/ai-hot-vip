@@ -28,9 +28,8 @@ def home():
         show_result = "block"
 
         try:
-            # 🔥 用IP當使用者
+            # 🔥 使用者IP
             user_id = request.remote_addr
-
             doc_ref = db.collection("users").document(user_id)
             doc = doc_ref.get()
 
@@ -41,11 +40,14 @@ def home():
 
             doc_ref.set({"count": count})
 
-            # 👉 保留輸入
+            # 🔥 取得輸入
             today = request.form.get("today", "")
             current = request.form.get("current", "")
             last1 = request.form.get("last1", "")
             last2 = request.form.get("last2", "")
+
+            if not current or not last1 or not last2:
+                raise Exception("請輸入完整數值")
 
             current_i = int(current)
             last1_i = int(last1)
@@ -87,17 +89,15 @@ def home():
 
             signal_extra = gen_signal()
 
-            # 🔥 操作建議（你的設定）
+            # 🔥 操作建議（你的邏輯）
             advice_type = random.choice(["不建議", "低本", "免費"])
 
             if advice_type == "不建議":
                 advice_text = "⚠️ 不建議進場"
                 extra_text = ""
-
             elif advice_type == "低本":
                 advice_text = "💡 建議低本測試"
                 extra_text = f"<br>🔎 訊號：{signal_extra}"
-
             else:
                 advice_text = "🎁 建議購買免費遊戲"
                 extra_text = f"<br>🔎 訊號：{signal_extra}"
@@ -105,13 +105,13 @@ def home():
             # 🔥 第4次鎖
             if count >= 4:
                 lock_html = f"""
-                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;">
+                <a href="{LINE_LINK}" target="_blank">
                     <div class="card step highlight">
                         🔒 操作建議（點我解鎖）
                     </div>
                 </a>
 
-                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;">
+                <a href="{LINE_LINK}" target="_blank">
                     <div class="card step">
                         🔒 建議區間（點我解鎖）
                     </div>
@@ -130,7 +130,6 @@ def home():
 
             result = f"""
             <div id="cards">
-
                 <div class="card step red">
                     📊 分析結果如下
                 </div>
@@ -153,103 +152,68 @@ def home():
                 <div class="card step small">
                     💡 建議低倍觀察，避免重壓
                 </div>
-
             </div>
             """
 
-        except:
-            result = "<div class='card'>⚠️ 輸入錯誤</div>"
+        except Exception as e:
+            result = f"<div class='card'>錯誤：{str(e)}</div>"
 
     return f"""
     <html>
     <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <style>
     body {{
         background:#0b0f1a;
         color:white;
-        font-family:sans-serif;
         text-align:center;
         padding:20px;
+        font-family:sans-serif;
     }}
-
     .title {{
         color:orange;
         font-size:26px;
         font-weight:bold;
     }}
-
     input {{
         width:90%;
         padding:12px;
-        margin:8px 0;
+        margin:8px;
         border-radius:10px;
         border:none;
         background:#1c2233;
         color:white;
     }}
-
     button {{
         width:95%;
         padding:15px;
-        margin-top:15px;
+        background:orange;
         border:none;
         border-radius:12px;
-        background:orange;
-        color:black;
     }}
-
     .card {{
         background:#151a2c;
         margin-top:15px;
         padding:15px;
         border-radius:15px;
-        opacity:0;
-        transform:translateY(30px);
     }}
-
-    .show {{
-        animation:fadeUp 0.5s forwards;
-    }}
-
-    @keyframes fadeUp {{
-        to {{ opacity:1; transform:translateY(0); }}
-    }}
-
     .highlight {{
         background:orange;
         color:black;
         font-weight:bold;
     }}
-
     .red {{
         background:#ff3b3b;
         font-weight:bold;
     }}
-
     .small {{
         font-size:12px;
         color:gray;
     }}
     </style>
-
-    <script>
-    window.onload = function() {{
-        let steps = document.querySelectorAll(".step");
-
-        steps.forEach((el, i) => {{
-            setTimeout(() => {{
-                el.classList.add("show");
-            }}, i * 600);
-        }});
-    }}
-    </script>
-
     </head>
 
     <body>
-
     <div class="title">⚡ 熱點雷達</div>
     <div style="font-size:12px;color:gray;">
         ※ 本系統為AI模型推估，結果僅供參考
