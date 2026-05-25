@@ -4,25 +4,22 @@ import os
 
 app = Flask(__name__)
 
-# 👉 你的LINE連結
-LINE_URL = "https://line.me/ti/p/nkakY8ZXma"
-
-# 👉 簡單鎖次數（記憶用）
-lock_count = 0
+# 👉 用 cookie/session 會更準，但這邊先用簡單方式（Render可跑）
+counter = 0
 
 @app.route("/", methods=["GET", "POST"])
 def home():
-    global lock_count
+    global counter
 
     result = ""
     show_result = "none"
-
     today_val = ""
     current_val = ""
     last1_val = ""
     last2_val = ""
 
     if request.method == "POST":
+        counter += 1  # 每按一次 +1
         show_result = "block"
 
         today_val = request.form["today"]
@@ -52,14 +49,14 @@ def home():
                 count = random.randint(1, 2)
                 if mode == "球":
                     num = random.randint(1, 6)
-                    return f"{count}個{mode} + {num}個相同大圖"
+                    return f"訊號：{count}個{mode} + {num}個相同大圖"
                 else:
                     seq = random.choice(["123","234","345","456","567"])
-                    return f"{count}個{mode} + {seq}順序大圖"
+                    return f"訊號：{count}個{mode} + {seq}順序大圖"
 
             signal_extra = gen_signal()
 
-            # 操作邏輯
+            # 🎯 操作邏輯
             if current > avg * 1.3:
                 status = "進入尾段醞釀"
                 action = "建議低本測試"
@@ -77,16 +74,25 @@ def home():
                 show_signal = True
 
             confidence = random.randint(80, 96)
+            signal_chance = random.randint(60, 95)
 
-            # 🔥 鎖機制（第4次才開）
-            lock_count += 1
+            signal_text = f"✅ 成功捕捉熱點訊號（{signal_chance}%）" if signal_chance > 75 else f"⚠️ 訊號偏弱（{signal_chance}%）"
 
-            if lock_count < 4:
-                lock_text = f"<br><span style='color:yellow;'>（第{lock_count}次鎖定中）</span>"
+            extra_block = f"<br>{signal_extra}" if show_signal else ""
+
+            # 🔥 第4次開始鎖
+            if counter >= 4:
+                lock_html = """
+                <a href="https://line.me/ti/p/nkakY8ZXma" style="text-decoration:none;">
+                    🔒 點我解鎖
+                </a>
+                """
+
+                action_display = f"操作建議（{lock_html}）"
+                range_display = f"建議區間（{lock_html}）"
             else:
-                lock_text = f"<br><a href='{LINE_URL}' style='color:cyan;'>👉 點我解鎖</a>"
-
-            extra_block = f"<br>🔥 訊號：{signal_extra}" if show_signal else ""
+                action_display = f"🎯 操作建議：{action}{extra_block}"
+                range_display = f"⏱ 建議區間：{range_text}"
 
             result = f"""
             <div id="cards">
@@ -95,19 +101,20 @@ def home():
                 </div>
 
                 <div class="card step">
+                    {signal_text}
+                </div>
+
+                <div class="card step">
                     📊 節奏判定：{status}<br>
                     ⚠️ 波動狀態：{risk}
                 </div>
 
                 <div class="card step highlight">
-                    🎯 操作建議：{action}
-                    {lock_text}
-                    {extra_block}
+                    {action_display}
                 </div>
 
                 <div class="card step">
-                    ⏱ 建議區間：{range_text}
-                    {lock_text}
+                    {range_display}
                 </div>
 
                 <div class="card step">
@@ -122,7 +129,7 @@ def home():
             """
 
         except Exception as e:
-            result = f"<div class='card'>⚠️ 錯誤：{str(e)}</div>"
+            result = f"<div class='card'>錯誤：{str(e)}</div>"
 
     return f"""
     <html>
@@ -136,11 +143,13 @@ def home():
             text-align:center;
             padding:20px;
         }}
+
         .title {{
             color:orange;
             font-size:26px;
             font-weight:bold;
         }}
+
         input {{
             width:90%;
             padding:12px;
@@ -150,6 +159,7 @@ def home():
             background:#1c2233;
             color:white;
         }}
+
         button {{
             width:95%;
             padding:15px;
@@ -159,31 +169,64 @@ def home():
             background:orange;
             color:black;
         }}
+
         .card {{
             background:#151a2c;
             margin-top:15px;
             padding:15px;
             border-radius:15px;
+            opacity:0;
+            transform:translateY(30px);
         }}
+
+        .show {{
+            animation:fadeUp 0.5s forwards;
+        }}
+
+        @keyframes fadeUp {{
+            to {{ opacity:1; transform:translateY(0); }}
+        }}
+
         .highlight {{
             background:orange;
             color:black;
             font-weight:bold;
         }}
+
         .red {{
             background:#ff3b3b;
             color:white;
+            font-weight:bold;
         }}
-        .small {{
-            font-size:12px;
-            color:gray;
+
+        a {{
+            color:#000;
+            font-weight:bold;
         }}
     </style>
+
+    <script>
+        function startAnalysis(form, e) {{
+            e.preventDefault();
+            setTimeout(() => form.submit(), 1500);
+        }}
+
+        window.onload = function() {{
+            let steps = document.querySelectorAll(".step");
+            steps.forEach((el, i) => {{
+                setTimeout(() => {{
+                    el.classList.add("show");
+                }}, i * 500);
+            }});
+        }}
+    </script>
+
     </head>
+
     <body>
         <div class="title">⚡ 熱點雷達</div>
 
-        <form method="post">
+        <form method="post" onsubmit="startAnalysis(this, event)">
             <input name="today" placeholder="今日得分率" value="{today_val}">
             <input name="current" placeholder="未開轉數" value="{current_val}">
             <input name="last1" placeholder="上次轉數" value="{last1_val}">
