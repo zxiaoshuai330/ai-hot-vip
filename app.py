@@ -2,9 +2,17 @@ from flask import Flask, request
 import random
 import os
 
+# 🔥 Firebase
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("serviceAccountKey.json")  # ← 改成你的檔名
+firebase_admin.initialize_app(cred)
+db = firestore.client()
+
 app = Flask(__name__)
 
-IG_LINK = "https://www.instagram.com/gambler_168"
+LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -20,6 +28,19 @@ def home():
         show_result = "block"
 
         try:
+            # 🔥 取得使用者IP（當帳號）
+            user_id = request.remote_addr
+
+            doc_ref = db.collection("users").document(user_id)
+            doc = doc_ref.get()
+
+            if doc.exists:
+                count = doc.to_dict().get("count", 0) + 1
+            else:
+                count = 1
+
+            doc_ref.set({"count": count})
+
             # 👉 保留輸入
             today = request.form.get("today", "")
             current = request.form.get("current", "")
@@ -49,25 +70,24 @@ def home():
             else:
                 status = "訊號累積中"
 
-            # 🔥 成功率
             signal_chance = random.randint(60, 95)
             confidence = random.randint(80, 96)
 
-            # 🔥 訊號生成
+            # 🔥 訊號
             def gen_signal():
                 mode = random.choice(["球", "免"])
-                count = random.randint(1, 2)
+                count_s = random.randint(1, 2)
 
                 if mode == "球":
                     num = random.randint(1, 6)
-                    return f"{count}個{mode} + {num}個相同大圖"
+                    return f"{count_s}個{mode} + {num}個相同大圖"
                 else:
                     seq = random.choice(["123","234","345","456","567"])
-                    return f"{count}個{mode} + {seq}順序大圖"
+                    return f"{count_s}個{mode} + {seq}順序大圖"
 
             signal_extra = gen_signal()
 
-            # 🔥 操作建議分類（照你原本）
+            # 🔥 操作建議（你的版本）
             advice_type = random.choice(["不建議", "低本", "免費"])
 
             if advice_type == "不建議":
@@ -82,20 +102,31 @@ def home():
                 advice_text = "🎁 建議購買免費遊戲"
                 extra_text = f"<br>🔎 訊號：{signal_extra}"
 
-            # 🔒 鎖區塊（操作建議＝黃色）
-            lock_html = f"""
-            <a href="{IG_LINK}" target="_blank" style="text-decoration:none; color:white;">
-                <div class="card step highlight">
-                    🔒 操作建議：{advice_text}{extra_text}（點我解鎖）
-                </div>
-            </a>
+            # 🔥 第4次開始鎖
+            if count >= 4:
+                lock_html = f"""
+                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;">
+                    <div class="card step highlight">
+                        🔒 操作建議（點我解鎖）
+                    </div>
+                </a>
 
-            <a href="{IG_LINK}" target="_blank" style="text-decoration:none; color:white;">
-                <div class="card step">
-                    🔒 建議區間（點我解鎖）
+                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;">
+                    <div class="card step">
+                        🔒 建議區間（點我解鎖）
+                    </div>
+                </a>
+                """
+            else:
+                lock_html = f"""
+                <div class="card step highlight">
+                    操作建議：{advice_text}{extra_text}
                 </div>
-            </a>
-            """
+
+                <div class="card step">
+                    建議區間：依當前節奏浮動
+                </div>
+                """
 
             result = f"""
             <div id="cards">
