@@ -2,16 +2,6 @@ from flask import Flask, request
 import random
 import os
 
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-# 🔥 Firebase 初始化（避免重複）
-if not firebase_admin._apps:
-    cred = credentials.Certificate("serviceAccountKey.json")
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
-
 app = Flask(__name__)
 
 LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
@@ -20,7 +10,7 @@ LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 def home():
     result = ""
 
-    # 🔥 預設輸入值（讓輸入保留）
+    # ✅ 保留輸入
     today = ""
     current = ""
     last1 = ""
@@ -28,19 +18,7 @@ def home():
 
     if request.method == "POST":
         try:
-            # 🔥 Firebase 計數
-            user_id = request.remote_addr
-            doc_ref = db.collection("users").document(user_id)
-            doc = doc_ref.get()
-
-            if doc.exists:
-                count = doc.to_dict().get("count", 0) + 1
-            else:
-                count = 1
-
-            doc_ref.set({"count": count})
-
-            # 🔥 取得輸入
+            # ✅ 取得輸入
             today = request.form.get("today", "")
             current = request.form.get("current", "")
             last1 = request.form.get("last1", "")
@@ -56,7 +34,7 @@ def home():
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
-            # 🔥 波動判斷
+            # 🔥 波動
             if diff > 80:
                 risk = "高波動（節奏不穩）"
             elif diff > 30:
@@ -64,7 +42,7 @@ def home():
             else:
                 risk = "穩定節奏"
 
-            # 🔥 節奏判斷
+            # 🔥 節奏
             if current_i > avg * 1.3:
                 status = "進入尾段醞釀"
             elif current_i < avg * 0.7:
@@ -72,7 +50,7 @@ def home():
             else:
                 status = "訊號累積中"
 
-            # 🔥 訊號產生
+            # 🔥 訊號
             def gen_signal():
                 mode = random.choice(["球", "免"])
                 count_s = random.randint(1, 2)
@@ -86,7 +64,7 @@ def home():
 
             signal_extra = gen_signal()
 
-            # 🔥 操作建議（你要求的邏輯）
+            # 🔥 操作建議（照你規則）
             advice_type = random.choice(["不建議", "低本", "免費"])
 
             if advice_type == "不建議":
@@ -99,30 +77,6 @@ def home():
                 advice_text = "🎁 建議購買免費遊戲"
                 extra = f"<br>🔎 訊號：{signal_extra}"
 
-            # 🔥 第4次鎖
-            if count >= 4:
-                lock_html = f"""
-                <a href="{LINE_LINK}" target="_blank">
-                    <div class="card highlight">
-                        🔒 操作建議（點我解鎖）
-                    </div>
-                </a>
-                <a href="{LINE_LINK}" target="_blank">
-                    <div class="card">
-                        🔒 建議區間（點我解鎖）
-                    </div>
-                </a>
-                """
-            else:
-                lock_html = f"""
-                <div class="card highlight">
-                    操作建議：{advice_text}{extra}
-                </div>
-                <div class="card">
-                    建議區間：依當前節奏浮動
-                </div>
-                """
-
             # 🔥 結果
             result = f"""
             <div class="card red">📊 分析結果如下</div>
@@ -134,14 +88,16 @@ def home():
                 ⚠️ 波動狀態：{risk}
             </div>
 
-            {lock_html}
+            <div class="card highlight">
+                操作建議：{advice_text}{extra}
+            </div>
+
+            <div class="card">
+                建議區間：依當前節奏浮動
+            </div>
 
             <div class="card">
                 🤖 AI信心指數：{random.randint(80,96)}%
-            </div>
-
-            <div class="card small">
-                💡 建議低倍觀察，避免重壓
             </div>
             """
 
@@ -180,6 +136,7 @@ def home():
         margin-top:15px;
         padding:15px;
         border-radius:15px;
+        color:white;
     }}
     .highlight {{
         background:yellow;
@@ -189,10 +146,6 @@ def home():
     .red {{
         background:#ff3b3b;
         font-weight:bold;
-    }}
-    .small {{
-        font-size:12px;
-        color:gray;
     }}
     </style>
     </head>
@@ -204,7 +157,7 @@ def home():
         ※ 本系統為AI模型推估，結果僅供參考
     </div>
 
-    <form method="POST" action="/">
+    <form method="POST">
         <input name="today" placeholder="今日得分率" value="{today}">
         <input name="current" placeholder="未開轉數" value="{current}">
         <input name="last1" placeholder="上次轉數" value="{last1}">
@@ -212,7 +165,6 @@ def home():
         <button type="submit">開始分析</button>
     </form>
 
-    <!-- 🔥 不再用 display:none，保證顯示 -->
     <div>
         {result}
     </div>
@@ -221,6 +173,5 @@ def home():
     </html>
     """
 
-# 🔥 Render 用
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)
