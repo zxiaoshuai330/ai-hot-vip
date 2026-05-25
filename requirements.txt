@@ -1,3 +1,2 @@
 Flask
-firebase-admin
 gunicorn
