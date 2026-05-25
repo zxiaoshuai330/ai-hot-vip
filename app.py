@@ -6,7 +6,7 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-cred = credentials.Certificate("serviceAccountKey.json")  # ← 改成你的檔名
+cred = credentials.Certificate("serviceAccountKey.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
@@ -28,7 +28,7 @@ def home():
         show_result = "block"
 
         try:
-            # 🔥 取得使用者IP（當帳號）
+            # 🔥 用IP當使用者
             user_id = request.remote_addr
 
             doc_ref = db.collection("users").document(user_id)
@@ -87,7 +87,7 @@ def home():
 
             signal_extra = gen_signal()
 
-            # 🔥 操作建議（你的版本）
+            # 🔥 操作建議（你的設定）
             advice_type = random.choice(["不建議", "低本", "免費"])
 
             if advice_type == "不建議":
@@ -102,7 +102,7 @@ def home():
                 advice_text = "🎁 建議購買免費遊戲"
                 extra_text = f"<br>🔎 訊號：{signal_extra}"
 
-            # 🔥 第4次開始鎖
+            # 🔥 第4次鎖
             if count >= 4:
                 lock_html = f"""
                 <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;">
