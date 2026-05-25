@@ -4,37 +4,36 @@ import os
 
 app = Flask(__name__)
 
-# ✅ 改成你的LINE
-line_link = "https://line.me/ti/p/nkakY8ZXma"
-
-MAX_FREE = 3
+IG_LINK = "https://www.instagram.com/gambler_168"
 
 @app.route("/", methods=["GET", "POST"])
 def home():
     result = ""
     show_result = "none"
 
-    today_val = ""
-    current_val = ""
-    last1_val = ""
-    last2_val = ""
+    today = ""
+    current = ""
+    last1 = ""
+    last2 = ""
 
     if request.method == "POST":
         show_result = "block"
 
-        today_val = request.form["today"]
-        current_val = request.form["current"]
-        last1_val = request.form["last1"]
-        last2_val = request.form["last2"]
-
         try:
-            current = int(current_val)
-            last1 = int(last1_val)
-            last2 = int(last2_val)
+            # 👉 保留輸入
+            today = request.form.get("today", "")
+            current = request.form.get("current", "")
+            last1 = request.form.get("last1", "")
+            last2 = request.form.get("last2", "")
 
-            avg = (last1 + last2) / 2
-            diff = abs(last1 - last2)
+            current_i = int(current)
+            last1_i = int(last1)
+            last2_i = int(last2)
 
+            avg = (last1_i + last2_i) / 2
+            diff = abs(last1_i - last2_i)
+
+            # 🔥 波動
             if diff > 80:
                 risk = "高波動（節奏不穩）"
             elif diff > 30:
@@ -42,56 +41,86 @@ def home():
             else:
                 risk = "穩定節奏"
 
-            if current > avg * 1.3:
+            # 🔥 節奏
+            if current_i > avg * 1.3:
                 status = "進入尾段醞釀"
-            elif current < avg * 0.7:
+            elif current_i < avg * 0.7:
                 status = "剛結束釋放"
             else:
                 status = "訊號累積中"
 
+            # 🔥 成功率
             signal_chance = random.randint(60, 95)
-            signal_text = f"🔥 成功捕捉熱點訊號（{signal_chance}%）"
-
             confidence = random.randint(80, 96)
 
-            def lock_block(text):
-                return f'''
-                <div onclick="goLine()"
-                     style="background:#222;padding:15px;border-radius:15px;margin-top:15px;">
-                    🔒 {text}<br>
-                    <span style="color:orange;">點擊解鎖完整功能</span>
+            # 🔥 訊號生成
+            def gen_signal():
+                mode = random.choice(["球", "免"])
+                count = random.randint(1, 2)
+
+                if mode == "球":
+                    num = random.randint(1, 6)
+                    return f"{count}個{mode} + {num}個相同大圖"
+                else:
+                    seq = random.choice(["123","234","345","456","567"])
+                    return f"{count}個{mode} + {seq}順序大圖"
+
+            signal_extra = gen_signal()
+
+            # 🔥 操作建議分類（照你原本）
+            advice_type = random.choice(["不建議", "低本", "免費"])
+
+            if advice_type == "不建議":
+                advice_text = "⚠️ 不建議進場"
+                extra_text = ""
+
+            elif advice_type == "低本":
+                advice_text = "💡 建議低本測試"
+                extra_text = f"<br>🔎 訊號：{signal_extra}"
+
+            else:
+                advice_text = "🎁 建議購買免費遊戲"
+                extra_text = f"<br>🔎 訊號：{signal_extra}"
+
+            # 🔒 鎖區塊（操作建議＝黃色）
+            lock_html = f"""
+            <a href="{IG_LINK}" target="_blank" style="text-decoration:none; color:white;">
+                <div class="card step highlight">
+                    🔒 操作建議：{advice_text}{extra_text}（點我解鎖）
                 </div>
-                '''
+            </a>
+
+            <a href="{IG_LINK}" target="_blank" style="text-decoration:none; color:white;">
+                <div class="card step">
+                    🔒 建議區間（點我解鎖）
+                </div>
+            </a>
+            """
 
             result = f"""
             <div id="cards">
 
-                <div class="card step red">📊 分析結果如下</div>
+                <div class="card step red">
+                    📊 分析結果如下
+                </div>
 
-                <div class="card step">🎯 今日得分率：{today_val}</div>
-
-                <div class="card step">{signal_text}</div>
+                <div class="card step">
+                    🔥 成功捕捉熱點訊號（{signal_chance}%）
+                </div>
 
                 <div class="card step">
                     📊 節奏判定：{status}<br>
                     ⚠️ 波動狀態：{risk}
                 </div>
 
-                <div id="vip-area">
-                    <div class="card step">👉 操作建議：建議低本測試</div>
-                    <div class="card step">⏱ 建議區間：約 {random.randint(40,70)} ~ {random.randint(80,120)} 轉</div>
-                </div>
+                {lock_html}
 
-                <div id="lock-area" style="display:none;">
-                    {lock_block("操作建議已鎖定")}
-                    {lock_block("建議區間已鎖定")}
+                <div class="card step">
+                    🤖 AI信心指數：{confidence}%
                 </div>
-
-                <div class="card step">🤖 AI信心指數：{confidence}%</div>
 
                 <div class="card step small">
-                    ⚠️ 熱點通常不會維持太久<br>
-                    💡 建議低倍觀察
+                    💡 建議低倍觀察，避免重壓
                 </div>
 
             </div>
@@ -117,6 +146,7 @@ def home():
     .title {{
         color:orange;
         font-size:26px;
+        font-weight:bold;
     }}
 
     input {{
@@ -156,8 +186,15 @@ def home():
         to {{ opacity:1; transform:translateY(0); }}
     }}
 
+    .highlight {{
+        background:orange;
+        color:black;
+        font-weight:bold;
+    }}
+
     .red {{
         background:#ff3b3b;
+        font-weight:bold;
     }}
 
     .small {{
@@ -167,48 +204,13 @@ def home():
     </style>
 
     <script>
-    let count = localStorage.getItem("use_count") || 0;
-    count = parseInt(count);
-
-    function startAnalysis(form, e) {{
-        e.preventDefault();
-
-        if(count > {MAX_FREE}) {{
-            alert("免費次數已用完，請加入LINE解鎖");
-            window.location.href = "{line_link}";
-            return;
-        }}
-
-        count++;
-        localStorage.setItem("use_count", count);
-
-        setTimeout(() => form.submit(), 2000);
-    }}
-
-    function goLine() {{
-        window.location.href = "{line_link}";
-    }}
-
     window.onload = function() {{
         let steps = document.querySelectorAll(".step");
 
         steps.forEach((el, i) => {{
             setTimeout(() => {{
                 el.classList.add("show");
-
-                let count = localStorage.getItem("use_count") || 0;
-
-                if(count > {MAX_FREE}) {{
-                    document.getElementById("vip-area").style.display = "none";
-                    document.getElementById("lock-area").style.display = "block";
-                }}
-
-                if (i === steps.length - 1) {{
-                    if (navigator.vibrate) {{
-                        navigator.vibrate([120,60,120]);
-                    }}
-                }}
-            }}, i * 500);
+            }}, i * 600);
         }});
     }}
     </script>
@@ -218,13 +220,16 @@ def home():
     <body>
 
     <div class="title">⚡ 熱點雷達</div>
+    <div style="font-size:12px;color:gray;">
+        ※ 本系統為AI模型推估，結果僅供參考
+    </div>
 
-    <form method="post" onsubmit="startAnalysis(this, event)">
-        <input name="today" placeholder="今日得分率">
-        <input name="current" placeholder="未開轉數">
-        <input name="last1" placeholder="上次轉數">
-        <input name="last2" placeholder="上上次">
-        <button>開始分析</button>
+    <form method="post">
+        <input name="today" placeholder="今日得分率" value="{today}">
+        <input name="current" placeholder="未開轉數" value="{current}">
+        <input name="last1" placeholder="上次轉數" value="{last1}">
+        <input name="last2" placeholder="上上次" value="{last2}">
+        <button type="submit">開始分析</button>
     </form>
 
     <div style="display:{show_result};">
