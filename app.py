@@ -1,12 +1,15 @@
 from flask import Flask, request
 import random
 import os
+import json
 
 # 🔥 Firebase
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-cred = credentials.Certificate("serviceAccountKey.json")
+# ✅ 從 Render 環境變數讀 JSON
+firebase_json = json.loads(os.environ["FIREBASE_KEY"])
+cred = credentials.Certificate(firebase_json)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
@@ -31,7 +34,7 @@ def home():
         last2_val = request.form["last2"]
 
         try:
-            # 🔥 使用者ID（用IP）
+            # 🔥 使用者ID（IP）
             user_id = request.remote_addr
 
             doc_ref = db.collection("users").document(user_id)
@@ -98,7 +101,7 @@ def home():
 
             extra_block = f"<br>{signal_extra}" if show_signal else ""
 
-            # 🔥 第4次鎖（Firebase版）
+            # 🔥 第4次鎖
             if count >= 4:
                 action_html = '<a href="https://line.me/ti/p/nkakY8ZXma" style="color:white;text-decoration:none;">🔒 操作建議（點我解鎖）</a>'
                 range_html = '<a href="https://line.me/ti/p/nkakY8ZXma" style="color:white;text-decoration:none;">🔒 建議區間（點我解鎖）</a>'
