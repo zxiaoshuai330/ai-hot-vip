@@ -2,25 +2,35 @@ from flask import Flask, request
 import random
 import os
 import json
-import firebase_admin
-from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
 LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 
-# ✅ Firebase 初始化（防炸）
-if not firebase_admin._apps:
-    firebase_json = json.loads(os.environ.get("FIREBASE_KEY", "{}"))
-    cred = credentials.Certificate(firebase_json)
-    firebase_admin.initialize_app(cred)
+# 🔥 嘗試載入 Firebase（失敗也不會炸）
+db = None
+try:
+    import firebase_admin
+    from firebase_admin import credentials, firestore
 
-db = firestore.client()
+    if not firebase_admin._apps:
+        firebase_json = json.loads(os.environ.get("FIREBASE_KEY", "{}"))
+        cred = credentials.Certificate(firebase_json)
+        firebase_admin.initialize_app(cred)
 
-# ✅ 防睡眠（給 UptimeRobot 用）
+    db = firestore.client()
+    print("✅ Firebase 已連線")
+
+except Exception as e:
+    print("❌ Firebase 失敗：", e)
+
+# ✅ 防睡眠
 @app.route("/ping")
 def ping():
     return "alive"
+
+# 🔥 備用本地計數（Firebase壞掉用）
+user_count = {}
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -37,7 +47,6 @@ def home():
         show_result = "block"
 
         try:
-            # ✅ Render IP 修正
             user_id = request.headers.get('X-Forwarded-For', request.remote_addr)
 
             game = request.form.get("game", "")
@@ -50,34 +59,40 @@ def home():
             last1_i = int(last1)
             last2_i = int(last2)
 
-            # ✅ Firebase 計數
-            ref = db.collection("users").document(user_id)
-            doc = ref.get()
+            # 🔥 計數（優先Firebase）
+            count = 1
 
-            if doc.exists:
-                count = doc.to_dict().get("count", 0) + 1
+            if db:
+                try:
+                    ref = db.collection("users").document(user_id)
+                    doc = ref.get()
+
+                    if doc.exists:
+                        count = doc.to_dict().get("count", 0) + 1
+
+                    ref.set({"count": count})
+
+                except Exception as e:
+                    print("⚠️ Firebase讀寫失敗，用本地計數", e)
+                    count = user_count.get(user_id, 0) + 1
+                    user_count[user_id] = count
             else:
-                count = 1
-
-            ref.set({"count": count})
+                count = user_count.get(user_id, 0) + 1
+                user_count[user_id] = count
 
             # 🔒 第4次鎖
             if count >= 4:
                 result = f"""
                 <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step highlight">
-                        🔒 操作建議（點我解鎖）
-                    </div>
+                    <div class="card step highlight">🔒 操作建議（點我解鎖）</div>
                 </a>
                 <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step">
-                        🔒 建議區間（點我解鎖）
-                    </div>
+                    <div class="card step">🔒 建議區間（點我解鎖）</div>
                 </a>
                 """
                 return render_page(result, show_result, game, today, current, last1, last2)
 
-            # 🔥 分析邏輯
+            # 🔥 分析
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
@@ -101,7 +116,7 @@ def home():
                 action = "購買免費遊戲"
                 range_text = f"{int(avg*0.6)}～{int(avg*0.9)} 轉"
 
-            # 🔥 訊號生成
+            # 🔥 訊號
             def gen_signal():
                 mode = random.choice(["球", "免"])
                 count = random.randint(1, 2)
@@ -117,7 +132,7 @@ def home():
             signal_chance = random.randint(60, 95)
             confidence = random.randint(80, 96)
 
-            # 🔥 操作建議 + 訊號
+            # 🔥 操作建議
             if status == "剛結束釋放":
                 action_block = f"""
                 <div class="card step highlight">
@@ -133,18 +148,16 @@ def home():
                 """
 
             result = f"""
-            <div id="cards">
-                <div class="card step red">📊 分析結果如下</div>
-                <div class="card step">🎮 選擇遊戲：{game}</div>
-                <div class="card step">🔥 成功捕捉熱點訊號（{signal_chance}%）</div>
-                <div class="card step">
-                    📊 節奏判定：{status}<br>
-                    ⚠️ 波動狀態：{risk}
-                </div>
-                {action_block}
-                <div class="card step">⏱ 建議區間：{range_text}</div>
-                <div class="card step">🤖 AI信心指數：{confidence}%</div>
+            <div class="card step red">📊 分析結果如下</div>
+            <div class="card step">🎮 遊戲：{game}</div>
+            <div class="card step">🔥 成功捕捉熱點訊號（{signal_chance}%）</div>
+            <div class="card step">
+                📊 節奏判定：{status}<br>
+                ⚠️ 波動狀態：{risk}
             </div>
+            {action_block}
+            <div class="card step">⏱ 建議區間：{range_text}</div>
+            <div class="card step">🤖 AI信心指數：{confidence}%</div>
             """
 
         except Exception as e:
@@ -159,75 +172,17 @@ def render_page(result, show_result, game, today, current, last1, last2):
     <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-    body {{
-        background:#0b0f1a;
-        color:white;
-        font-family:sans-serif;
-        text-align:center;
-        padding:20px;
-    }}
-    .title {{
-        color:orange;
-        font-size:26px;
-        font-weight:bold;
-    }}
-    input, select {{
-        width:90%;
-        padding:12px;
-        margin:8px 0;
-        border-radius:10px;
-        border:none;
-        background:#1c2233;
-        color:white;
-    }}
-    button {{
-        width:95%;
-        padding:15px;
-        margin-top:15px;
-        border:none;
-        border-radius:12px;
-        background:orange;
-        color:black;
-    }}
-    .card {{
-        background:#151a2c;
-        margin-top:15px;
-        padding:15px;
-        border-radius:15px;
-        opacity:0;
-        transform:translateY(30px);
-    }}
-    .show {{
-        animation:fadeUp 0.5s forwards;
-    }}
-    @keyframes fadeUp {{
-        to {{ opacity:1; transform:translateY(0); }}
-    }}
-    .highlight {{
-        background:orange;
-        color:black;
-        font-weight:bold;
-    }}
-    .red {{
-        background:#ff3b3b;
-        font-weight:bold;
-    }}
+    body {{background:#0b0f1a;color:white;text-align:center;padding:20px;}}
+    input,select {{width:90%;padding:12px;margin:8px;border-radius:10px;border:none;background:#1c2233;color:white;}}
+    button {{width:95%;padding:15px;background:orange;border:none;border-radius:12px;}}
+    .card {{background:#151a2c;margin-top:15px;padding:15px;border-radius:15px;}}
+    .highlight {{background:orange;color:black;}}
+    .red {{background:#ff3b3b;}}
     </style>
-
-    <script>
-    window.onload = function() {{
-        let steps = document.querySelectorAll(".step");
-        steps.forEach((el, i) => {{
-            setTimeout(() => {{
-                el.classList.add("show");
-            }}, i * 600);
-        }});
-    }}
-    </script>
     </head>
-
     <body>
-    <div class="title">⚡ 熱點雷達</div>
+
+    <h2>⚡ 熱點雷達</h2>
 
     <form method="post">
         <select name="game">
@@ -241,16 +196,16 @@ def render_page(result, show_result, game, today, current, last1, last2):
         <input name="last1" placeholder="上次轉數" value="{last1}">
         <input name="last2" placeholder="上上次" value="{last2}">
 
-        <button type="submit">開始分析</button>
+        <button>開始分析</button>
     </form>
 
     <div style="display:{show_result};">
         {result}
     </div>
+
     </body>
     </html>
     """
-
 
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)
