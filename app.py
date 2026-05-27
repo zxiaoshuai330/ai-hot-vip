@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 
-# 🔥 嘗試載入 Firebase（失敗也不會炸）
+# Firebase（安全載入）
 db = None
 try:
     import firebase_admin
@@ -19,17 +19,14 @@ try:
         firebase_admin.initialize_app(cred)
 
     db = firestore.client()
-    print("✅ Firebase 已連線")
+except:
+    pass
 
-except Exception as e:
-    print("❌ Firebase 失敗：", e)
-
-# ✅ 防睡眠
+# 防睡眠
 @app.route("/ping")
 def ping():
     return "alive"
 
-# 🔥 備用本地計數（Firebase壞掉用）
 user_count = {}
 
 @app.route("/", methods=["GET", "POST"])
@@ -59,40 +56,21 @@ def home():
             last1_i = int(last1)
             last2_i = int(last2)
 
-            # 🔥 計數（優先Firebase）
-            count = 1
-
+            # 計數
             if db:
                 try:
                     ref = db.collection("users").document(user_id)
                     doc = ref.get()
-
-                    if doc.exists:
-                        count = doc.to_dict().get("count", 0) + 1
-
+                    count = doc.to_dict().get("count", 0) + 1 if doc.exists else 1
                     ref.set({"count": count})
-
-                except Exception as e:
-                    print("⚠️ Firebase讀寫失敗，用本地計數", e)
+                except:
                     count = user_count.get(user_id, 0) + 1
                     user_count[user_id] = count
             else:
                 count = user_count.get(user_id, 0) + 1
                 user_count[user_id] = count
 
-            # 🔒 第4次鎖
-            if count >= 4:
-                result = f"""
-                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step highlight">🔒 操作建議（點我解鎖）</div>
-                </a>
-                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step">🔒 建議區間（點我解鎖）</div>
-                </a>
-                """
-                return render_page(result, show_result, game, today, current, last1, last2)
-
-            # 🔥 分析
+            # 分析
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
@@ -116,7 +94,7 @@ def home():
                 action = "購買免費遊戲"
                 range_text = f"{int(avg*0.6)}～{int(avg*0.9)} 轉"
 
-            # 🔥 訊號
+            # 訊號
             def gen_signal():
                 mode = random.choice(["球", "免"])
                 count = random.randint(1, 2)
@@ -128,22 +106,35 @@ def home():
                     return f"{count}個{mode} + {seq}順序大圖"
 
             signal_extra = gen_signal()
-
             signal_chance = random.randint(60, 95)
             confidence = random.randint(80, 96)
 
-            # 🔥 操作建議
-            if status == "剛結束釋放":
+            # 🔒 鎖判斷（只鎖這兩塊）
+            if count >= 4:
                 action_block = f"""
-                <div class="card step highlight">
-                    🎯 操作建議：{action}
-                </div>
+                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
+                    <div class="card step highlight">
+                        🔒 操作建議（點我解鎖）
+                    </div>
+                </a>
+                """
+                range_block = f"""
+                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
+                    <div class="card step">
+                        🔒 建議區間（點我解鎖）
+                    </div>
+                </a>
                 """
             else:
                 action_block = f"""
                 <div class="card step highlight">
                     🎯 操作建議：{action}<br>
                     🔥 訊號：{signal_extra}
+                </div>
+                """
+                range_block = f"""
+                <div class="card step">
+                    ⏱ 建議區間：{range_text}
                 </div>
                 """
 
@@ -155,8 +146,10 @@ def home():
                 📊 節奏判定：{status}<br>
                 ⚠️ 波動狀態：{risk}
             </div>
+
             {action_block}
-            <div class="card step">⏱ 建議區間：{range_text}</div>
+            {range_block}
+
             <div class="card step">🤖 AI信心指數：{confidence}%</div>
             """
 
@@ -173,13 +166,33 @@ def render_page(result, show_result, game, today, current, last1, last2):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
     body {{background:#0b0f1a;color:white;text-align:center;padding:20px;}}
-    input,select {{width:90%;padding:12px;margin:8px;border-radius:10px;border:none;background:#1c2233;color:white;}}
-    button {{width:95%;padding:15px;background:orange;border:none;border-radius:12px;}}
+
+    input,select {{
+        width:90%;
+        padding:12px;
+        margin:8px;
+        border-radius:10px;
+        border:none;
+        background:#1c2233;
+        color:white;
+    }}
+
+    button {{
+        width:95%;
+        padding:15px;
+        background:orange;
+        border:none;
+        border-radius:12px;
+        color:black; /* ✅ 強制黑字 */
+        font-weight:bold;
+    }}
+
     .card {{background:#151a2c;margin-top:15px;padding:15px;border-radius:15px;}}
     .highlight {{background:orange;color:black;}}
     .red {{background:#ff3b3b;}}
     </style>
     </head>
+
     <body>
 
     <h2>⚡ 熱點雷達</h2>
@@ -196,7 +209,7 @@ def render_page(result, show_result, game, today, current, last1, last2):
         <input name="last1" placeholder="上次轉數" value="{last1}">
         <input name="last2" placeholder="上上次" value="{last2}">
 
-        <button>開始分析</button>
+        <button type="submit">開始分析</button>
     </form>
 
     <div style="display:{show_result};">
