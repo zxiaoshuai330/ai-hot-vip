@@ -1,45 +1,43 @@
 from flask import Flask, request
 import random
 import os
-import threading
-import time
-import requests
-import firebase_admin
-from firebase_admin import credentials
 import json
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
+
+# 🔥 你的LINE
+LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 
 # 🔥 Firebase 初始化（用環境變數）
 firebase_json = json.loads(os.environ["FIREBASE_KEY"])
 cred = credentials.Certificate(firebase_json)
 firebase_admin.initialize_app(cred)
+db = firestore.client()
 
-# 🔥 防睡眠（Render 自ping）
-def keep_alive():
-    while True:
-        try:
-            requests.get("https://ai-hot-vip.onrender.com")
-            print("ping ok")
-        except:
-            print("ping fail")
-        time.sleep(300)
-
-threading.Thread(target=keep_alive).start()
+# 🔥 防睡眠路由（給UptimeRobot打）
+@app.route("/ping")
+def ping():
+    return "alive"
 
 @app.route("/", methods=["GET", "POST"])
 def home():
     result = ""
     show_result = "none"
+
+    game = ""
     today = ""
     current = ""
     last1 = ""
     last2 = ""
-    game = ""
 
     if request.method == "POST":
         show_result = "block"
+
         try:
+            user_id = request.remote_addr  # 簡單用IP當帳號
+
             game = request.form.get("game", "")
             today = request.form.get("today", "")
             current = request.form.get("current", "")
@@ -50,6 +48,34 @@ def home():
             last1_i = int(last1)
             last2_i = int(last2)
 
+            # 🔥 Firebase計數
+            ref = db.collection("users").document(user_id)
+            doc = ref.get()
+
+            if doc.exists:
+                count = doc.to_dict().get("count", 0) + 1
+            else:
+                count = 1
+
+            ref.set({"count": count})
+
+            # 🔒 第4次鎖
+            if count >= 4:
+                result = f"""
+                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
+                    <div class="card step highlight">
+                        🔒 操作建議（點我解鎖）
+                    </div>
+                </a>
+                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
+                    <div class="card step">
+                        🔒 建議區間（點我解鎖）
+                    </div>
+                </a>
+                """
+                return render_page(result, show_result, game, today, current, last1, last2)
+
+            # 🔥 正常分析
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
@@ -62,10 +88,16 @@ def home():
 
             if current_i > avg * 1.3:
                 status = "進入尾段醞釀"
+                action = "建議低本測試"
+                range_text = f"{int(avg*0.8)}～{int(avg*1.2)} 轉"
             elif current_i < avg * 0.7:
                 status = "剛結束釋放"
+                action = "不建議進場"
+                range_text = f"建議等待累積至 {int(avg)} 轉以上"
             else:
                 status = "訊號累積中"
+                action = "購買免費遊戲"
+                range_text = f"{int(avg*0.6)}～{int(avg*0.9)} 轉"
 
             signal_chance = random.randint(60, 95)
             confidence = random.randint(80, 96)
@@ -75,28 +107,22 @@ def home():
                 <div class="card step red">
                     📊 分析結果如下
                 </div>
-
                 <div class="card step">
                     🎮 選擇遊戲：{game}
                 </div>
-
                 <div class="card step">
                     🔥 成功捕捉熱點訊號（{signal_chance}%）
                 </div>
-
                 <div class="card step">
                     📊 節奏判定：{status}<br>
                     ⚠️ 波動狀態：{risk}
                 </div>
-
                 <div class="card step highlight">
-                    🎯 操作建議：建議低本測試
+                    🎯 操作建議：{action}
                 </div>
-
                 <div class="card step">
-                    ⏱ 建議區間：{int(avg*0.6)}～{int(avg*1.2)} 轉
+                    ⏱ 建議區間：{range_text}
                 </div>
-
                 <div class="card step">
                     🤖 AI信心指數：{confidence}%
                 </div>
@@ -106,6 +132,10 @@ def home():
         except:
             result = "<div class='card'>⚠️ 輸入錯誤</div>"
 
+    return render_page(result, show_result, game, today, current, last1, last2)
+
+
+def render_page(result, show_result, game, today, current, last1, last2):
     return f"""
     <html>
     <head>
@@ -118,13 +148,11 @@ def home():
         text-align:center;
         padding:20px;
     }}
-
     .title {{
         color:orange;
         font-size:26px;
         font-weight:bold;
     }}
-
     input, select {{
         width:90%;
         padding:12px;
@@ -134,7 +162,6 @@ def home():
         background:#1c2233;
         color:white;
     }}
-
     button {{
         width:95%;
         padding:15px;
@@ -144,7 +171,6 @@ def home():
         background:orange;
         color:black;
     }}
-
     .card {{
         background:#151a2c;
         margin-top:15px;
@@ -153,21 +179,17 @@ def home():
         opacity:0;
         transform:translateY(30px);
     }}
-
     .show {{
         animation:fadeUp 0.5s forwards;
     }}
-
     @keyframes fadeUp {{
         to {{ opacity:1; transform:translateY(0); }}
     }}
-
     .highlight {{
         background:orange;
         color:black;
         font-weight:bold;
     }}
-
     .red {{
         background:#ff3b3b;
         font-weight:bold;
@@ -188,9 +210,8 @@ def home():
 
     <body>
     <div class="title">⚡ 熱點雷達</div>
-
     <div style="font-size:12px;color:gray;">
-        ※ 本系統為AI模型推估，結果僅供參考
+        ※ 本系統為AI模型推估
     </div>
 
     <form method="post">
@@ -211,10 +232,10 @@ def home():
     <div style="display:{show_result};">
         {result}
     </div>
-
     </body>
     </html>
     """
+
 
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)
