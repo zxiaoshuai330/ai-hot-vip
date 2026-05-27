@@ -1,26 +1,18 @@
 from flask import Flask, request
 import random
 import os
-import json
-import firebase_admin
-from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
 LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 
-# ✅ Firebase 初始化（防重複初始化）
-if not firebase_admin._apps:
-    firebase_json = json.loads(os.environ.get("FIREBASE_KEY", "{}"))
-    cred = credentials.Certificate(firebase_json)
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
-
-# ✅ 防睡眠（給 UptimeRobot）
+# ✅ 防睡眠
 @app.route("/ping")
 def ping():
     return "alive"
+
+# 🔥 暫時用記憶體計數（測試用）
+user_count = {}
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -37,7 +29,6 @@ def home():
         show_result = "block"
 
         try:
-            # ✅ 修正 Render IP 問題
             user_id = request.headers.get('X-Forwarded-For', request.remote_addr)
 
             game = request.form.get("game", "")
@@ -50,18 +41,11 @@ def home():
             last1_i = int(last1)
             last2_i = int(last2)
 
-            # ✅ Firebase 計數
-            ref = db.collection("users").document(user_id)
-            doc = ref.get()
+            # 🔥 計數（本地版）
+            count = user_count.get(user_id, 0) + 1
+            user_count[user_id] = count
 
-            if doc.exists:
-                count = doc.to_dict().get("count", 0) + 1
-            else:
-                count = 1
-
-            ref.set({"count": count})
-
-            # ✅ 第4次鎖
+            # 🔒 第4次鎖
             if count >= 4:
                 result = f"""
                 <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
@@ -77,7 +61,7 @@ def home():
                 """
                 return render_page(result, show_result, game, today, current, last1, last2)
 
-            # ✅ 正常分析
+            # 🔥 分析
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
@@ -120,7 +104,6 @@ def home():
             """
 
         except Exception as e:
-            # ✅ 顯示錯誤（幫你抓問題）
             result = f"<div class='card'>❌ 錯誤：{str(e)}</div>"
 
     return render_page(result, show_result, game, today, current, last1, last2)
@@ -201,9 +184,6 @@ def render_page(result, show_result, game, today, current, last1, last2):
 
     <body>
     <div class="title">⚡ 熱點雷達</div>
-    <div style="font-size:12px;color:gray;">
-        ※ 本系統為AI模型推估
-    </div>
 
     <form method="post">
         <select name="game">
