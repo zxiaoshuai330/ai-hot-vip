@@ -109,7 +109,7 @@ def home():
             signal_chance = random.randint(60, 95)
             confidence = random.randint(80, 96)
 
-            # 🔒 鎖判斷（只鎖這兩塊）
+            # 🔒 鎖判斷
             if count >= 4:
                 action_block = f"""
                 <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
@@ -165,7 +165,12 @@ def render_page(result, show_result, game, today, current, last1, last2):
     <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-    body {{background:#0b0f1a;color:white;text-align:center;padding:20px;}}
+    body {{
+        background:#0b0f1a;
+        color:white;
+        text-align:center;
+        padding:20px;
+    }}
 
     input,select {{
         width:90%;
@@ -183,13 +188,27 @@ def render_page(result, show_result, game, today, current, last1, last2):
         background:orange;
         border:none;
         border-radius:12px;
-        color:black; /* ✅ 強制黑字 */
+        color:black;
         font-weight:bold;
     }}
 
-    .card {{background:#151a2c;margin-top:15px;padding:15px;border-radius:15px;}}
-    .highlight {{background:orange;color:black;}}
-    .red {{background:#ff3b3b;}}
+    .card {{
+        background:#151a2c;
+        margin-top:15px;
+        padding:15px;
+        border-radius:15px;
+    }}
+
+    .highlight {{
+        background:orange;
+        color:black;
+        font-weight:bold; /* ✅ 修正這裡 */
+    }}
+
+    .red {{
+        background:#ff3b3b;
+        font-weight:bold;
+    }}
     </style>
     </head>
 
