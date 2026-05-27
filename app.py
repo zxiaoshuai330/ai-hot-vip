@@ -1,18 +1,26 @@
 from flask import Flask, request
 import random
 import os
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
 LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 
-# ✅ 防睡眠
+# ✅ Firebase 初始化（防炸）
+if not firebase_admin._apps:
+    firebase_json = json.loads(os.environ.get("FIREBASE_KEY", "{}"))
+    cred = credentials.Certificate(firebase_json)
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# ✅ 防睡眠（給 UptimeRobot 用）
 @app.route("/ping")
 def ping():
     return "alive"
-
-# 🔥 暫時用記憶體計數（測試用）
-user_count = {}
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -29,6 +37,7 @@ def home():
         show_result = "block"
 
         try:
+            # ✅ Render IP 修正
             user_id = request.headers.get('X-Forwarded-For', request.remote_addr)
 
             game = request.form.get("game", "")
@@ -41,9 +50,16 @@ def home():
             last1_i = int(last1)
             last2_i = int(last2)
 
-            # 🔥 計數（本地版）
-            count = user_count.get(user_id, 0) + 1
-            user_count[user_id] = count
+            # ✅ Firebase 計數
+            ref = db.collection("users").document(user_id)
+            doc = ref.get()
+
+            if doc.exists:
+                count = doc.to_dict().get("count", 0) + 1
+            else:
+                count = 1
+
+            ref.set({"count": count})
 
             # 🔒 第4次鎖
             if count >= 4:
@@ -61,7 +77,7 @@ def home():
                 """
                 return render_page(result, show_result, game, today, current, last1, last2)
 
-            # 🔥 分析
+            # 🔥 分析邏輯
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
@@ -85,8 +101,36 @@ def home():
                 action = "購買免費遊戲"
                 range_text = f"{int(avg*0.6)}～{int(avg*0.9)} 轉"
 
+            # 🔥 訊號生成
+            def gen_signal():
+                mode = random.choice(["球", "免"])
+                count = random.randint(1, 2)
+                if mode == "球":
+                    num = random.randint(1, 6)
+                    return f"{count}個{mode} + {num}個相同大圖"
+                else:
+                    seq = random.choice(["123","234","345","456","567"])
+                    return f"{count}個{mode} + {seq}順序大圖"
+
+            signal_extra = gen_signal()
+
             signal_chance = random.randint(60, 95)
             confidence = random.randint(80, 96)
+
+            # 🔥 操作建議 + 訊號
+            if status == "剛結束釋放":
+                action_block = f"""
+                <div class="card step highlight">
+                    🎯 操作建議：{action}
+                </div>
+                """
+            else:
+                action_block = f"""
+                <div class="card step highlight">
+                    🎯 操作建議：{action}<br>
+                    🔥 訊號：{signal_extra}
+                </div>
+                """
 
             result = f"""
             <div id="cards">
@@ -97,7 +141,7 @@ def home():
                     📊 節奏判定：{status}<br>
                     ⚠️ 波動狀態：{risk}
                 </div>
-                <div class="card step highlight">🎯 操作建議：{action}</div>
+                {action_block}
                 <div class="card step">⏱ 建議區間：{range_text}</div>
                 <div class="card step">🤖 AI信心指數：{confidence}%</div>
             </div>
