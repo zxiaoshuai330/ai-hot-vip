@@ -1,63 +1,57 @@
 from flask import Flask, request
 import random
 import os
+import threading
+import time
+import requests
+import firebase_admin
+from firebase_admin import credentials
 import json
 
-# 🔥 Firebase
-import firebase_admin
-from firebase_admin import credentials, firestore
+app = Flask(__name__)
 
-# ✅ 從 Render 環境變數讀 JSON
+# 🔥 Firebase 初始化（用環境變數）
 firebase_json = json.loads(os.environ["FIREBASE_KEY"])
 cred = credentials.Certificate(firebase_json)
 firebase_admin.initialize_app(cred)
-db = firestore.client()
 
-app = Flask(__name__)
+# 🔥 防睡眠（Render 自ping）
+def keep_alive():
+    while True:
+        try:
+            requests.get("https://ai-hot-vip.onrender.com")
+            print("ping ok")
+        except:
+            print("ping fail")
+        time.sleep(300)
+
+threading.Thread(target=keep_alive).start()
 
 @app.route("/", methods=["GET", "POST"])
 def home():
     result = ""
     show_result = "none"
-
-    today_val = ""
-    current_val = ""
-    last1_val = ""
-    last2_val = ""
+    today = ""
+    current = ""
+    last1 = ""
+    last2 = ""
+    game = ""
 
     if request.method == "POST":
         show_result = "block"
-
-        today_val = request.form["today"]
-        current_val = request.form["current"]
-        last1_val = request.form["last1"]
-        last2_val = request.form["last2"]
-
         try:
-            # 🔥 使用者ID（IP）
-            user_id = request.remote_addr
+            game = request.form.get("game", "")
+            today = request.form.get("today", "")
+            current = request.form.get("current", "")
+            last1 = request.form.get("last1", "")
+            last2 = request.form.get("last2", "")
 
-            doc_ref = db.collection("users").document(user_id)
-            doc = doc_ref.get()
+            current_i = int(current)
+            last1_i = int(last1)
+            last2_i = int(last2)
 
-            if doc.exists:
-                count = doc.to_dict().get("count", 0)
-            else:
-                count = 0
-
-            count += 1
-
-            doc_ref.set({
-                "count": count
-            })
-
-            # ===== 原本邏輯 =====
-            current = int(current_val)
-            last1 = int(last1_val)
-            last2 = int(last2_val)
-
-            avg = (last1 + last2) / 2
-            diff = abs(last1 - last2)
+            avg = (last1_i + last2_i) / 2
+            diff = abs(last1_i - last2_i)
 
             if diff > 80:
                 risk = "高波動（節奏不穩）"
@@ -66,142 +60,158 @@ def home():
             else:
                 risk = "穩定節奏"
 
-            def gen_signal():
-                mode = random.choice(["球", "免"])
-                c = random.randint(1, 2)
-                if mode == "球":
-                    num = random.randint(1, 6)
-                    return f"{c}個{mode} + {num}個相同大圖"
-                else:
-                    seq = random.choice(["123","234","345","456","567"])
-                    return f"{c}個{mode} + {seq}順序大圖"
-
-            signal_extra = gen_signal()
-
-            if current > avg * 1.3:
+            if current_i > avg * 1.3:
                 status = "進入尾段醞釀"
-                action = "建議低本測試"
-                range_text = f"{int(avg*0.8)}～{int(avg*1.2)} 轉"
-                show_signal = True
-            elif current < avg * 0.7:
+            elif current_i < avg * 0.7:
                 status = "剛結束釋放"
-                action = "不建議進場"
-                range_text = f"建議等待累積至 {int(avg)} 轉以上"
-                show_signal = False
             else:
                 status = "訊號累積中"
-                action = "購買免費遊戲"
-                range_text = f"{int(avg*0.6)}～{int(avg*0.9)} 轉"
-                show_signal = True
 
-            confidence = random.randint(80, 96)
             signal_chance = random.randint(60, 95)
-
-            signal_text = f"✅ 成功捕捉熱點訊號（{signal_chance}%）" if signal_chance > 75 else f"⚠️ 訊號偏弱（{signal_chance}%）"
-
-            extra_block = f"<br>{signal_extra}" if show_signal else ""
-
-            # 🔥 第4次鎖
-            if count >= 4:
-                action_html = '<a href="https://line.me/ti/p/nkakY8ZXma" style="color:white;text-decoration:none;">🔒 操作建議（點我解鎖）</a>'
-                range_html = '<a href="https://line.me/ti/p/nkakY8ZXma" style="color:white;text-decoration:none;">🔒 建議區間（點我解鎖）</a>'
-            else:
-                action_html = f"🎯 操作建議：{action}{extra_block}"
-                range_html = f"⏱ 建議區間：{range_text}"
+            confidence = random.randint(80, 96)
 
             result = f"""
-            <div class="card red">📊 分析結果如下</div>
+            <div id="cards">
+                <div class="card step red">
+                    📊 分析結果如下
+                </div>
 
-            <div class="card">{signal_text}</div>
+                <div class="card step">
+                    🎮 選擇遊戲：{game}
+                </div>
 
-            <div class="card">
-                📊 節奏判定：{status}<br>
-                ⚠️ 波動狀態：{risk}
-            </div>
+                <div class="card step">
+                    🔥 成功捕捉熱點訊號（{signal_chance}%）
+                </div>
 
-            <div class="card highlight">
-                {action_html}
-            </div>
+                <div class="card step">
+                    📊 節奏判定：{status}<br>
+                    ⚠️ 波動狀態：{risk}
+                </div>
 
-            <div class="card highlight">
-                {range_html}
-            </div>
+                <div class="card step highlight">
+                    🎯 操作建議：建議低本測試
+                </div>
 
-            <div class="card">
-                🤖 AI信心指數：{confidence}%
-            </div>
+                <div class="card step">
+                    ⏱ 建議區間：{int(avg*0.6)}～{int(avg*1.2)} 轉
+                </div>
 
-            <div class="card small">
-                ⚠️ 熱點訊號通常不會維持太久<br>
-                💡 建議低倍觀察
+                <div class="card step">
+                    🤖 AI信心指數：{confidence}%
+                </div>
             </div>
             """
 
-        except Exception as e:
-            result = f"<div class='card'>錯誤：{str(e)}</div>"
+        except:
+            result = "<div class='card'>⚠️ 輸入錯誤</div>"
 
     return f"""
     <html>
     <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {{
-            background:#0b0f1a;
-            color:white;
-            text-align:center;
-            padding:20px;
-        }}
-        input {{
-            width:90%;
-            padding:12px;
-            margin:8px 0;
-            border-radius:10px;
-            border:none;
-            background:#1c2233;
-            color:white;
-        }}
-        button {{
-            width:95%;
-            padding:15px;
-            margin-top:15px;
-            border:none;
-            border-radius:12px;
-            background:orange;
-            color:black;
-        }}
-        .card {{
-            background:#151a2c;
-            margin-top:15px;
-            padding:15px;
-            border-radius:15px;
-        }}
-        .highlight {{
-            background:orange;
-            color:black;
-            font-weight:bold;
-        }}
-        .red {{
-            background:#ff3b3b;
-        }}
-        .small {{
-            font-size:12px;
-            color:gray;
-        }}
+    body {{
+        background:#0b0f1a;
+        color:white;
+        font-family:sans-serif;
+        text-align:center;
+        padding:20px;
+    }}
+
+    .title {{
+        color:orange;
+        font-size:26px;
+        font-weight:bold;
+    }}
+
+    input, select {{
+        width:90%;
+        padding:12px;
+        margin:8px 0;
+        border-radius:10px;
+        border:none;
+        background:#1c2233;
+        color:white;
+    }}
+
+    button {{
+        width:95%;
+        padding:15px;
+        margin-top:15px;
+        border:none;
+        border-radius:12px;
+        background:orange;
+        color:black;
+    }}
+
+    .card {{
+        background:#151a2c;
+        margin-top:15px;
+        padding:15px;
+        border-radius:15px;
+        opacity:0;
+        transform:translateY(30px);
+    }}
+
+    .show {{
+        animation:fadeUp 0.5s forwards;
+    }}
+
+    @keyframes fadeUp {{
+        to {{ opacity:1; transform:translateY(0); }}
+    }}
+
+    .highlight {{
+        background:orange;
+        color:black;
+        font-weight:bold;
+    }}
+
+    .red {{
+        background:#ff3b3b;
+        font-weight:bold;
+    }}
     </style>
+
+    <script>
+    window.onload = function() {{
+        let steps = document.querySelectorAll(".step");
+        steps.forEach((el, i) => {{
+            setTimeout(() => {{
+                el.classList.add("show");
+            }}, i * 600);
+        }});
+    }}
+    </script>
     </head>
 
     <body>
-        <form method="post">
-            <input name="today" placeholder="今日得分率" value="{today_val}">
-            <input name="current" placeholder="未開轉數" value="{current_val}">
-            <input name="last1" placeholder="上次轉數" value="{last1_val}">
-            <input name="last2" placeholder="上上次" value="{last2_val}">
-            <button>開始分析</button>
-        </form>
+    <div class="title">⚡ 熱點雷達</div>
 
-        <div style="display:{show_result};">
-            {result}
-        </div>
+    <div style="font-size:12px;color:gray;">
+        ※ 本系統為AI模型推估，結果僅供參考
+    </div>
+
+    <form method="post">
+        <select name="game">
+            <option value="">選擇遊戲</option>
+            <option value="賽特" {"selected" if game=="賽特" else ""}>賽特</option>
+            <option value="赤三國" {"selected" if game=="赤三國" else ""}>赤三國</option>
+        </select>
+
+        <input name="today" placeholder="今日得分率" value="{today}">
+        <input name="current" placeholder="未開轉數" value="{current}">
+        <input name="last1" placeholder="上次轉數" value="{last1}">
+        <input name="last2" placeholder="上上次" value="{last2}">
+
+        <button type="submit">開始分析</button>
+    </form>
+
+    <div style="display:{show_result};">
+        {result}
+    </div>
+
     </body>
     </html>
     """
