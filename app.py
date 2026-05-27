@@ -7,16 +7,17 @@ from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
-# 🔥 你的LINE
 LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
 
-# 🔥 Firebase 初始化（用環境變數）
-firebase_json = json.loads(os.environ["FIREBASE_KEY"])
-cred = credentials.Certificate(firebase_json)
-firebase_admin.initialize_app(cred)
+# ✅ Firebase 初始化（防重複初始化）
+if not firebase_admin._apps:
+    firebase_json = json.loads(os.environ.get("FIREBASE_KEY", "{}"))
+    cred = credentials.Certificate(firebase_json)
+    firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
-# 🔥 防睡眠路由（給UptimeRobot打）
+# ✅ 防睡眠（給 UptimeRobot）
 @app.route("/ping")
 def ping():
     return "alive"
@@ -36,7 +37,8 @@ def home():
         show_result = "block"
 
         try:
-            user_id = request.remote_addr  # 簡單用IP當帳號
+            # ✅ 修正 Render IP 問題
+            user_id = request.headers.get('X-Forwarded-For', request.remote_addr)
 
             game = request.form.get("game", "")
             today = request.form.get("today", "")
@@ -48,7 +50,7 @@ def home():
             last1_i = int(last1)
             last2_i = int(last2)
 
-            # 🔥 Firebase計數
+            # ✅ Firebase 計數
             ref = db.collection("users").document(user_id)
             doc = ref.get()
 
@@ -59,7 +61,7 @@ def home():
 
             ref.set({"count": count})
 
-            # 🔒 第4次鎖
+            # ✅ 第4次鎖
             if count >= 4:
                 result = f"""
                 <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
@@ -75,7 +77,7 @@ def home():
                 """
                 return render_page(result, show_result, game, today, current, last1, last2)
 
-            # 🔥 正常分析
+            # ✅ 正常分析
             avg = (last1_i + last2_i) / 2
             diff = abs(last1_i - last2_i)
 
@@ -104,33 +106,22 @@ def home():
 
             result = f"""
             <div id="cards">
-                <div class="card step red">
-                    📊 分析結果如下
-                </div>
-                <div class="card step">
-                    🎮 選擇遊戲：{game}
-                </div>
-                <div class="card step">
-                    🔥 成功捕捉熱點訊號（{signal_chance}%）
-                </div>
+                <div class="card step red">📊 分析結果如下</div>
+                <div class="card step">🎮 選擇遊戲：{game}</div>
+                <div class="card step">🔥 成功捕捉熱點訊號（{signal_chance}%）</div>
                 <div class="card step">
                     📊 節奏判定：{status}<br>
                     ⚠️ 波動狀態：{risk}
                 </div>
-                <div class="card step highlight">
-                    🎯 操作建議：{action}
-                </div>
-                <div class="card step">
-                    ⏱ 建議區間：{range_text}
-                </div>
-                <div class="card step">
-                    🤖 AI信心指數：{confidence}%
-                </div>
+                <div class="card step highlight">🎯 操作建議：{action}</div>
+                <div class="card step">⏱ 建議區間：{range_text}</div>
+                <div class="card step">🤖 AI信心指數：{confidence}%</div>
             </div>
             """
 
-        except:
-            result = "<div class='card'>⚠️ 輸入錯誤</div>"
+        except Exception as e:
+            # ✅ 顯示錯誤（幫你抓問題）
+            result = f"<div class='card'>❌ 錯誤：{str(e)}</div>"
 
     return render_page(result, show_result, game, today, current, last1, last2)
 
