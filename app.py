@@ -4,11 +4,20 @@ import os
 import threading
 import time
 import requests
+import firebase_admin
+from firebase_admin import credentials, firestore
+import json
 
 app = Flask(__name__)
 
-# 🔥 你的解鎖連結
-LOCK_URL = "https://www.instagram.com/gambler_168"
+# 🔥 改成你的LINE連結
+LOCK_URL = "https://lin.ee/你的連結"
+
+# 🔥 Firebase 初始化
+firebase_json = json.loads(os.environ["FIREBASE_KEY"])
+cred = credentials.Certificate(firebase_json)
+firebase_admin.initialize_app(cred)
+db = firestore.client()
 
 # 🔥 防睡眠（Render 自己 ping 自己）
 def keep_alive():
@@ -22,9 +31,7 @@ def keep_alive():
 
 threading.Thread(target=keep_alive).start()
 
-# 🔥 IP紀錄
-user_count = {}
-
+# 🔥 取得 IP
 def get_ip():
     return request.headers.get('X-Forwarded-For', request.remote_addr)
 
@@ -39,22 +46,29 @@ def home():
     last2_val = ""
     game = ""
 
-    ip = get_ip()
-
-    # 初始化
-    if ip not in user_count:
-        user_count[ip] = 0
-
-    # Cookie
-    visit = int(request.cookies.get("visit", 0))
-
     if request.method == "POST":
         show_result = "block"
 
-        user_count[ip] += 1
-        visit += 1
+        ip = get_ip()
 
-        locked = (user_count[ip] >= 4 or visit >= 4)
+        # 🔥 Firebase 記錄
+        user_ref = db.collection("users").document(ip)
+        doc = user_ref.get()
+
+        if doc.exists:
+            data = doc.to_dict()
+            count = data.get("count", 0)
+        else:
+            count = 0
+
+        count += 1
+
+        user_ref.set({
+            "count": count
+        })
+
+        # 🔒 第4次鎖
+        locked = count >= 4
 
         game = request.form.get("game", "")
         today_val = request.form.get("today", "")
@@ -112,14 +126,14 @@ def home():
 
             extra_block = f"<br>{signal_extra}" if show_signal else ""
 
-            # 🔒 鎖區塊
+            # 🔒 鎖區塊（LINE）
             if locked:
                 action_html = f"""
                 <a href="{LOCK_URL}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step highlight">🔒 操作建議（點我解鎖）</div>
+                    <div class="card step highlight">🔒 操作建議（點我加LINE解鎖）</div>
                 </a>
                 <a href="{LOCK_URL}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step">🔒 建議區間（點我解鎖）</div>
+                    <div class="card step">🔒 建議區間（點我加LINE解鎖）</div>
                 </a>
                 """
             else:
@@ -242,6 +256,7 @@ def home():
     </script>
     </head>
     <body>
+
     <div class="title">⚡ 熱點雷達</div>
     <div style="font-size:12px;color:gray;">
         ※ 本系統為AI模型推估，結果僅供參考
@@ -270,9 +285,7 @@ def home():
     </html>
     """
 
-    resp = make_response(html)
-    resp.set_cookie("visit", str(visit))
-    return resp
+    return make_response(html)
 
 
 port = int(os.environ.get("PORT", 10000))
