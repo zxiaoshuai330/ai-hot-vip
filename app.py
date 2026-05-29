@@ -30,8 +30,8 @@ def keep_alive():
 
 threading.Thread(target=keep_alive, daemon=True).start()
 
-# ✅ 已幫你放LINE
-LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
+# ✅ 用 Render 環境變數（沒設就用備用）
+LINE_LINK = os.environ.get("LINE_LINK", "https://line.me/ti/p/nkakY8ZXma")
 
 @app.route("/", methods=["GET", "POST"])
 def home():
