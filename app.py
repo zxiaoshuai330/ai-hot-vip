@@ -10,8 +10,8 @@ import json
 
 app = Flask(__name__)
 
-# 🔥 改成你的LINE連結
-LOCK_URL = "https://lin.ee/你的連結"
+# 🔥 改這裡（你的LINE連結）
+LOCK_URL = "https://line.me/ti/p/nkakY8ZXma"
 
 # 🔥 Firebase 初始化
 firebase_json = json.loads(os.environ["FIREBASE_KEY"])
@@ -51,7 +51,7 @@ def home():
 
         ip = get_ip()
 
-        # 🔥 Firebase 記錄
+        # 🔥 Firebase 次數紀錄
         user_ref = db.collection("users").document(ip)
         doc = user_ref.get()
 
@@ -93,13 +93,13 @@ def home():
 
             def gen_signal():
                 mode = random.choice(["球", "免"])
-                count = random.randint(1, 2)
+                c = random.randint(1, 2)
                 if mode == "球":
                     num = random.randint(1, 6)
-                    return f"訊號：{count}個{mode} + {num}個相同大圖"
+                    return f"{c}個{mode} + {num}個相同大圖"
                 else:
                     seq = random.choice(["123","234","345","456","567"])
-                    return f"訊號：{count}個{mode} + {seq}順序大圖"
+                    return f"{c}個{mode} + {seq}順序大圖"
 
             signal_extra = gen_signal()
 
@@ -126,14 +126,14 @@ def home():
 
             extra_block = f"<br>{signal_extra}" if show_signal else ""
 
-            # 🔒 鎖區塊（LINE）
+            # 🔒 鎖區塊（只鎖操作建議）
             if locked:
                 action_html = f"""
                 <a href="{LOCK_URL}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step highlight">🔒 操作建議（點我加LINE解鎖）</div>
+                    <div class="card step highlight">🔒 操作建議（點我解鎖）</div>
                 </a>
                 <a href="{LOCK_URL}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step">🔒 建議區間（點我加LINE解鎖）</div>
+                    <div class="card step">🔒 建議區間（點我解鎖）</div>
                 </a>
                 """
             else:
@@ -149,26 +149,30 @@ def home():
 
             result = f"""
             <div id="cards">
-                <div class="card step red">
-                    📊 分析結果如下
-                </div>
+                <div class="card step red">📊 分析結果如下</div>
+
                 <div class="card step">
                     🎮 選擇遊戲：{game}
                 </div>
+
                 <div class="card step">
                     {signal_text}
                 </div>
+
                 <div class="card step">
                     📊 節奏判定：{status}<br>
                     ⚠️ 波動狀態：{risk}
                 </div>
+
                 {action_html}
+
                 <div class="card step">
                     🤖 AI信心指數：{confidence}%
                 </div>
+
                 <div class="card step small">
                     ⚠️ 熱點訊號通常不會維持太久<br>
-                    💡 建議低倍觀察，避免重壓
+                    💡 建議低倍觀察
                 </div>
             </div>
             """
@@ -184,14 +188,8 @@ def home():
     body {{
         background:#0b0f1a;
         color:white;
-        font-family:sans-serif;
         text-align:center;
         padding:20px;
-    }}
-    .title {{
-        color:orange;
-        font-size:26px;
-        font-weight:bold;
     }}
     input, select {{
         width:90%;
@@ -255,12 +253,11 @@ def home():
     }}
     </script>
     </head>
+
     <body>
 
-    <div class="title">⚡ 熱點雷達</div>
-    <div style="font-size:12px;color:gray;">
-        ※ 本系統為AI模型推估，結果僅供參考
-    </div>
+    <h2 style="color:orange;">⚡ 熱點雷達</h2>
+    <div style="font-size:12px;color:gray;">※ 本系統為AI模型推估，結果僅供參考</div>
 
     <form method="post" onsubmit="startAnalysis(this, event)">
         <select name="game">
