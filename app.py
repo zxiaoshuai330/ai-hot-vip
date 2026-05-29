@@ -1,78 +1,74 @@
-from flask import Flask, request
+from flask import Flask, request, make_response
 import random
 import os
-import json
+import threading
+import time
+import requests
 
 app = Flask(__name__)
 
-LINE_LINK = "https://line.me/ti/p/nkakY8ZXma"
+# 🔥 你的解鎖連結
+LOCK_URL = "https://www.instagram.com/gambler_168"
 
-# Firebase（安全載入）
-db = None
-try:
-    import firebase_admin
-    from firebase_admin import credentials, firestore
+# 🔥 防睡眠（Render 自己 ping 自己）
+def keep_alive():
+    while True:
+        try:
+            requests.get("https://ai-hot-vip.onrender.com")
+            print("ping ok")
+        except:
+            print("ping fail")
+        time.sleep(300)
 
-    if not firebase_admin._apps:
-        firebase_json = json.loads(os.environ.get("FIREBASE_KEY", "{}"))
-        cred = credentials.Certificate(firebase_json)
-        firebase_admin.initialize_app(cred)
+threading.Thread(target=keep_alive).start()
 
-    db = firestore.client()
-except:
-    pass
-
-# 防睡眠
-@app.route("/ping")
-def ping():
-    return "alive"
-
+# 🔥 IP紀錄
 user_count = {}
+
+def get_ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr)
 
 @app.route("/", methods=["GET", "POST"])
 def home():
     result = ""
     show_result = "none"
 
+    today_val = ""
+    current_val = ""
+    last1_val = ""
+    last2_val = ""
     game = ""
-    today = ""
-    current = ""
-    last1 = ""
-    last2 = ""
+
+    ip = get_ip()
+
+    # 初始化
+    if ip not in user_count:
+        user_count[ip] = 0
+
+    # Cookie
+    visit = int(request.cookies.get("visit", 0))
 
     if request.method == "POST":
         show_result = "block"
 
+        user_count[ip] += 1
+        visit += 1
+
+        locked = (user_count[ip] >= 4 or visit >= 4)
+
+        game = request.form.get("game", "")
+        today_val = request.form.get("today", "")
+        current_val = request.form.get("current", "")
+        last1_val = request.form.get("last1", "")
+        last2_val = request.form.get("last2", "")
+
         try:
-            user_id = request.headers.get('X-Forwarded-For', request.remote_addr)
+            current = int(current_val)
+            last1 = int(last1_val)
+            last2 = int(last2_val)
 
-            game = request.form.get("game", "")
-            today = request.form.get("today", "")
-            current = request.form.get("current", "")
-            last1 = request.form.get("last1", "")
-            last2 = request.form.get("last2", "")
-
-            current_i = int(current)
-            last1_i = int(last1)
-            last2_i = int(last2)
-
-            # 計數
-            if db:
-                try:
-                    ref = db.collection("users").document(user_id)
-                    doc = ref.get()
-                    count = doc.to_dict().get("count", 0) + 1 if doc.exists else 1
-                    ref.set({"count": count})
-                except:
-                    count = user_count.get(user_id, 0) + 1
-                    user_count[user_id] = count
-            else:
-                count = user_count.get(user_id, 0) + 1
-                user_count[user_id] = count
-
-            # 分析
-            avg = (last1_i + last2_i) / 2
-            diff = abs(last1_i - last2_i)
+            avg = (last1 + last2) / 2
+            diff = abs(last1 - last2)
 
             if diff > 80:
                 risk = "高波動（節奏不穩）"
@@ -81,86 +77,92 @@ def home():
             else:
                 risk = "穩定節奏"
 
-            if current_i > avg * 1.3:
-                status = "進入尾段醞釀"
-                action = "建議低本測試"
-                range_text = f"{int(avg*0.8)}～{int(avg*1.2)} 轉"
-            elif current_i < avg * 0.7:
-                status = "剛結束釋放"
-                action = "不建議進場"
-                range_text = f"建議等待累積至 {int(avg)} 轉以上"
-            else:
-                status = "訊號累積中"
-                action = "購買免費遊戲"
-                range_text = f"{int(avg*0.6)}～{int(avg*0.9)} 轉"
-
-            # 訊號
             def gen_signal():
                 mode = random.choice(["球", "免"])
                 count = random.randint(1, 2)
                 if mode == "球":
                     num = random.randint(1, 6)
-                    return f"{count}個{mode} + {num}個相同大圖"
+                    return f"訊號：{count}個{mode} + {num}個相同大圖"
                 else:
                     seq = random.choice(["123","234","345","456","567"])
-                    return f"{count}個{mode} + {seq}順序大圖"
+                    return f"訊號：{count}個{mode} + {seq}順序大圖"
 
             signal_extra = gen_signal()
-            signal_chance = random.randint(60, 95)
-            confidence = random.randint(80, 96)
 
-            # 🔒 鎖判斷
-            if count >= 4:
-                action_block = f"""
-                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step highlight">
-                        🔒 操作建議（點我解鎖）
-                    </div>
+            if current > avg * 1.3:
+                status = "進入尾段醞釀"
+                action = "建議低本測試"
+                range_text = f"{int(avg*0.8)}～{int(avg*1.2)} 轉"
+                show_signal = True
+            elif current < avg * 0.7:
+                status = "剛結束釋放"
+                action = "不建議進場"
+                range_text = f"建議等待累積至 {int(avg)} 轉以上"
+                show_signal = False
+            else:
+                status = "訊號累積中"
+                action = "購買免費遊戲"
+                range_text = f"{int(avg*0.6)}～{int(avg*0.9)} 轉"
+                show_signal = True
+
+            confidence = random.randint(80, 96)
+            signal_chance = random.randint(60, 95)
+
+            signal_text = f"✅ 成功捕捉熱點訊號（{signal_chance}%）" if signal_chance > 75 else f"⚠️ 訊號偏弱（{signal_chance}%）"
+
+            extra_block = f"<br>{signal_extra}" if show_signal else ""
+
+            # 🔒 鎖區塊
+            if locked:
+                action_html = f"""
+                <a href="{LOCK_URL}" target="_blank" style="text-decoration:none;color:white;">
+                    <div class="card step highlight">🔒 操作建議（點我解鎖）</div>
                 </a>
-                """
-                range_block = f"""
-                <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;color:white;">
-                    <div class="card step">
-                        🔒 建議區間（點我解鎖）
-                    </div>
+                <a href="{LOCK_URL}" target="_blank" style="text-decoration:none;color:white;">
+                    <div class="card step">🔒 建議區間（點我解鎖）</div>
                 </a>
                 """
             else:
-                action_block = f"""
+                action_html = f"""
                 <div class="card step highlight">
-                    🎯 操作建議：{action}<br>
-                    🔥 訊號：{signal_extra}
+                    🎯 操作建議：{action}
+                    {extra_block}
                 </div>
-                """
-                range_block = f"""
                 <div class="card step">
                     ⏱ 建議區間：{range_text}
                 </div>
                 """
 
             result = f"""
-            <div class="card step red">📊 分析結果如下</div>
-            <div class="card step">🎮 遊戲：{game}</div>
-            <div class="card step">🔥 成功捕捉熱點訊號（{signal_chance}%）</div>
-            <div class="card step">
-                📊 節奏判定：{status}<br>
-                ⚠️ 波動狀態：{risk}
+            <div id="cards">
+                <div class="card step red">
+                    📊 分析結果如下
+                </div>
+                <div class="card step">
+                    🎮 選擇遊戲：{game}
+                </div>
+                <div class="card step">
+                    {signal_text}
+                </div>
+                <div class="card step">
+                    📊 節奏判定：{status}<br>
+                    ⚠️ 波動狀態：{risk}
+                </div>
+                {action_html}
+                <div class="card step">
+                    🤖 AI信心指數：{confidence}%
+                </div>
+                <div class="card step small">
+                    ⚠️ 熱點訊號通常不會維持太久<br>
+                    💡 建議低倍觀察，避免重壓
+                </div>
             </div>
-
-            {action_block}
-            {range_block}
-
-            <div class="card step">🤖 AI信心指數：{confidence}%</div>
             """
 
-        except Exception as e:
-            result = f"<div class='card'>❌ 錯誤：{str(e)}</div>"
+        except:
+            result = "<div class='card'>⚠️ 輸入錯誤</div>"
 
-    return render_page(result, show_result, game, today, current, last1, last2)
-
-
-def render_page(result, show_result, game, today, current, last1, last2):
-    return f"""
+    html = f"""
     <html>
     <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -168,65 +170,94 @@ def render_page(result, show_result, game, today, current, last1, last2):
     body {{
         background:#0b0f1a;
         color:white;
+        font-family:sans-serif;
         text-align:center;
         padding:20px;
     }}
-
-    input,select {{
+    .title {{
+        color:orange;
+        font-size:26px;
+        font-weight:bold;
+    }}
+    input, select {{
         width:90%;
         padding:12px;
-        margin:8px;
+        margin:8px 0;
         border-radius:10px;
         border:none;
         background:#1c2233;
         color:white;
     }}
-
     button {{
         width:95%;
         padding:15px;
-        background:orange;
+        margin-top:15px;
         border:none;
         border-radius:12px;
+        background:orange;
         color:black;
-        font-weight:bold;
     }}
-
     .card {{
         background:#151a2c;
         margin-top:15px;
         padding:15px;
         border-radius:15px;
+        opacity:0;
+        transform:translateY(30px);
     }}
-
+    .show {{
+        animation:fadeUp 0.5s forwards;
+    }}
+    @keyframes fadeUp {{
+        to {{ opacity:1; transform:translateY(0); }}
+    }}
     .highlight {{
         background:orange;
         color:black;
-        font-weight:bold; /* ✅ 修正這裡 */
+        font-weight:bold;
     }}
-
     .red {{
         background:#ff3b3b;
         font-weight:bold;
     }}
+    .small {{
+        font-size:12px;
+        color:gray;
+    }}
     </style>
+    <script>
+    function startAnalysis(form, e) {{
+        e.preventDefault();
+        setTimeout(() => form.submit(), 2000);
+    }}
+
+    window.onload = function() {{
+        let steps = document.querySelectorAll(".step");
+        steps.forEach((el, i) => {{
+            setTimeout(() => {{
+                el.classList.add("show");
+            }}, i * 600);
+        }});
+    }}
+    </script>
     </head>
-
     <body>
+    <div class="title">⚡ 熱點雷達</div>
+    <div style="font-size:12px;color:gray;">
+        ※ 本系統為AI模型推估，結果僅供參考
+    </div>
 
-    <h2>⚡ 熱點雷達</h2>
-
-    <form method="post">
+    <form method="post" onsubmit="startAnalysis(this, event)">
         <select name="game">
             <option value="">選擇遊戲</option>
             <option value="賽特" {"selected" if game=="賽特" else ""}>賽特</option>
             <option value="赤三國" {"selected" if game=="赤三國" else ""}>赤三國</option>
         </select>
 
-        <input name="today" placeholder="今日得分率" value="{today}">
-        <input name="current" placeholder="未開轉數" value="{current}">
-        <input name="last1" placeholder="上次轉數" value="{last1}">
-        <input name="last2" placeholder="上上次" value="{last2}">
+        <input name="today" placeholder="今日得分率" value="{today_val}">
+        <input name="current" placeholder="未開轉數" value="{current_val}">
+        <input name="last1" placeholder="上次轉數" value="{last1_val}">
+        <input name="last2" placeholder="上上次" value="{last2_val}">
 
         <button type="submit">開始分析</button>
     </form>
@@ -238,6 +269,11 @@ def render_page(result, show_result, game, today, current, last1, last2):
     </body>
     </html>
     """
+
+    resp = make_response(html)
+    resp.set_cookie("visit", str(visit))
+    return resp
+
 
 port = int(os.environ.get("PORT", 10000))
 app.run(host="0.0.0.0", port=port)
