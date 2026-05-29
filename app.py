@@ -30,7 +30,7 @@ def keep_alive():
 
 threading.Thread(target=keep_alive, daemon=True).start()
 
-# ✅ 用 Render 環境變數（沒設就用備用）
+# ✅ LINE 用環境變數（你已經設好了）
 LINE_LINK = os.environ.get("LINE_LINK", "https://line.me/ti/p/nkakY8ZXma")
 
 @app.route("/", methods=["GET", "POST"])
@@ -48,10 +48,16 @@ def home():
         show_result = "block"
 
         try:
-            # ===== 🔥 使用者識別（防無痕）=====
-            user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-            user_agent = request.headers.get("User-Agent")
-            user_id = f"{user_ip}_{user_agent}"
+            # ===== 🔥 穩定IP抓法（重點修正）=====
+            forwarded_for = request.headers.get("X-Forwarded-For")
+
+            if forwarded_for:
+                user_ip = forwarded_for.split(",")[0].strip()
+            else:
+                user_ip = request.remote_addr
+
+            # 👉 🔥 關鍵：只用IP（穩定鎖）
+            user_id = user_ip
 
             # ===== 🔥 次數紀錄 =====
             doc_ref = db.collection("users").document(user_id)
@@ -123,7 +129,7 @@ def home():
 
             extra_block = f"<br>{signal_extra}" if show_signal else ""
 
-            # ===== 🔒 鎖只鎖兩塊 =====
+            # ===== 🔒 鎖機制 =====
             if is_locked:
                 action_html = f"""
                 <a href="{LINE_LINK}" target="_blank" style="text-decoration:none;">
